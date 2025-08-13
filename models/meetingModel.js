@@ -25,6 +25,26 @@ class MeetingModel {
     });
   }
 
+static async findAllMeetings() {
+  return await prisma.meeting.findMany({
+    orderBy: [
+      { date: 'asc' },
+      { startTime: 'asc' },
+    ],
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true, // optional if you want it public
+        }
+      }
+    }
+  });
+}
+
+
   static async findMeetingById(id) {
     return await prisma.meeting.findUnique({
       where: { id },

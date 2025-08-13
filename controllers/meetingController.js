@@ -62,6 +62,31 @@ class MeetingController {
     }
   }
 
+static async getAllMeetings(req, res) {
+  try {
+    const meetings = await MeetingModel.findAllMeetings();
+    res.json({
+      meetings: meetings.map(meeting => ({
+        id: meeting.id,
+        userId: meeting.userId,
+        title: meeting.title,
+        description: meeting.description,
+        date: meeting.date.toISOString().split('T')[0],
+        startTime: meeting.startTime,
+        endTime: meeting.endTime,
+        user: {
+          id: meeting.user.id,
+          firstName: meeting.user.firstName,
+          lastName: meeting.user.lastName,
+          email: meeting.user.email, // optional
+        }
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching all meetings', error: error.message });
+  }
+}
+
   static async updateMeeting(req, res) {
     try {
       const { id } = req.params;
