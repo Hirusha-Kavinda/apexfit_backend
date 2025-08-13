@@ -7,11 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum MeetingStatus {
+  pending
+  cancel
+  complete
+}
+
+
 model User {
   id        Int      @id @default(autoincrement())
   firstName String   @default("")
   lastName  String   @default("")
-  birthday  DateTime @db.Date // Remove @default(now())
+  birthday  String
   email     String   @unique(map: "User_email_key")
   password  String
   role      String   @default("USER")
@@ -21,14 +28,15 @@ model User {
 }
 
 model Meeting {
-  id          Int      @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   userId      Int
-  user        User     @relation("UserMeetings", fields: [userId], references: [id])
+  user        User          @relation("UserMeetings", fields: [userId], references: [id])
   title       String
   description String?
   date        DateTime
   startTime   String
   endTime     String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      MeetingStatus @default(pending)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 }

@@ -53,6 +53,7 @@ class MeetingController {
           title: meeting.title,
           description: meeting.description,
           date: meeting.date.toISOString().split('T')[0],
+          status: meeting.status,
           startTime: meeting.startTime,
           endTime: meeting.endTime,
         })),
@@ -72,6 +73,7 @@ static async getAllMeetings(req, res) {
         title: meeting.title,
         description: meeting.description,
         date: meeting.date.toISOString().split('T')[0],
+        status: meeting.status,
         startTime: meeting.startTime,
         endTime: meeting.endTime,
         user: {
@@ -130,6 +132,7 @@ static async getAllMeetings(req, res) {
           title: updatedMeeting.title,
           description: updatedMeeting.description,
           date: updatedMeeting.date.toISOString().split('T')[0],
+          status: meeting.status,
           startTime: updatedMeeting.startTime,
           endTime: updatedMeeting.endTime,
         },
@@ -158,6 +161,48 @@ static async getAllMeetings(req, res) {
       res.status(500).json({ message: 'Error deleting meeting', error: error.message });
     }
   }
+
+
+static async updateMeetingStatus(req, res) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      
+      // Validate status
+      const validStatuses = ['pending', 'complete', 'cancel'];
+      if (!status || !validStatuses.includes(status.toLowerCase())) {
+        return res.status(400).json({ 
+          message: 'Invalid status. Must be one of: pending, complete, cancel' 
+        });
+      }
+
+      // Check if meeting exists
+      const existingMeeting = await MeetingModel.findMeetingById(parseInt(id));
+      if (!existingMeeting) {
+        return res.status(404).json({ message: 'Meeting not found' });
+      }
+
+      // Update the meeting status
+      const updatedMeeting = await MeetingModel.updateMeeting(parseInt(id), {
+        status: status.toLowerCase()
+      });
+
+      res.json({
+        message: 'Meeting status updated successfully',
+        meeting: updatedMeeting
+      });
+
+    } catch (error) {
+      console.error('Error updating meeting status:', error);
+      res.status(500).json({ 
+        message: 'Error updating meeting status', 
+        error: error.message 
+      });
+    }
+  }
+
+
+
 }
 
 module.exports = MeetingController;

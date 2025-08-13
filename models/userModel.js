@@ -22,7 +22,7 @@ class UserModel {
       data: {
         firstName,
         lastName,
-        birthday: new Date(birthday), // Ensure birthday is a Date object
+        birthday,
         email,
         password,
         role: role.toUpperCase(),
