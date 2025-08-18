@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const authRoutes = require('./routes/authRoutes');
 const meetingRoutes = require('./routes/meetingRoute');
+const userDetailsRoutes = require('./routes/userDetailsRoute');
 
 dotenv.config();
 
@@ -13,6 +14,7 @@ app.use(express.json());
 
 app.use('/api/auth', authRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use("/api/userdetails", userDetailsRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
