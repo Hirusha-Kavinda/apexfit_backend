@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const authRoutes = require('./routes/authRoutes');
 const meetingRoutes = require('./routes/meetingRoute');
 const userDetailsRoutes = require('./routes/userDetailsRoute');
+const exercisePlanRoutes = require('./routes/exercisePlanRoutes');
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use("/api/userdetails", userDetailsRoutes);
+app.use('/api/exercise-plans', exercisePlanRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
