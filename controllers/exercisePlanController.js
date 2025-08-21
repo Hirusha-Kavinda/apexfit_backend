@@ -1,3 +1,4 @@
+// exercisePlanController.js
 const ExercisePlanModel = require('../models/exercisePlanModel');
 
 class ExercisePlanController {
@@ -53,14 +54,21 @@ class ExercisePlanController {
 
   static async createExercisePlan(req, res) {
     try {
-      const { day, name, sets, reps, duration } = req.body;
-      const userId = req.user.id;
+      const { day, name, sets, reps, duration, userId } = req.body;
+      
+      // Use userId from body if provided, otherwise from JWT token
+      const finalUserId = userId || (req.user ? req.user.id : null);
 
       if (!day || !name || !sets || !reps || !duration) {
         return res.status(400).json({ message: 'Day, name, sets, reps, and duration are required' });
       }
 
-      const exercisePlan = await ExercisePlanModel.createExercisePlan(userId, day, name, sets, reps, duration);
+      // Check if we have a valid userId
+      if (!finalUserId) {
+        return res.status(400).json({ message: 'UserId is required (either from token or request body)' });
+      }
+
+      const exercisePlan = await ExercisePlanModel.createExercisePlan(finalUserId, day, name, sets, reps, duration);
 
       // Get exercise plan with user details
       const exercisePlanWithUser = await ExercisePlanModel.findExercisePlanByIdWithUser(exercisePlan.id);
@@ -86,6 +94,95 @@ class ExercisePlanController {
     } catch (error) {
       console.error('Error creating exercise plan:', error);
       res.status(500).json({ message: 'Error creating exercise plan', error: error.message });
+    }
+  }
+
+  // NEW: Bulk create exercise plans
+  static async createBulkExercisePlans(req, res) {
+    try {
+      const exercisePlansData = req.body;
+
+      // Validate that request body is an array
+      if (!Array.isArray(exercisePlansData)) {
+        return res.status(400).json({ message: 'Request body must be an array of exercise plans' });
+      }
+
+      if (exercisePlansData.length === 0) {
+        return res.status(400).json({ message: 'At least one exercise plan is required' });
+      }
+
+      // Validate each exercise plan and prepare data
+      const validatedPlans = [];
+      const errors = [];
+
+      for (let i = 0; i < exercisePlansData.length; i++) {
+        const { day, name, sets, reps, duration, userId } = exercisePlansData[i];
+        
+        // Use userId from body if provided, otherwise from JWT token
+        const finalUserId = userId || (req.user ? req.user.id : null);
+
+        // Validate required fields
+        if (!day || !name || !sets || !reps || !duration) {
+          errors.push(`Plan ${i + 1}: Day, name, sets, reps, and duration are required`);
+          continue;
+        }
+
+        if (!finalUserId) {
+          errors.push(`Plan ${i + 1}: UserId is required (either from token or request body)`);
+          continue;
+        }
+
+        validatedPlans.push({
+          userId: finalUserId,
+          day,
+          name,
+          sets: parseInt(sets),
+          reps,
+          duration,
+        });
+      }
+
+      // If there are validation errors, return them
+      if (errors.length > 0) {
+        return res.status(400).json({ 
+          message: 'Validation errors found',
+          errors 
+        });
+      }
+
+      // Create plans and get the count
+      const createResult = await ExercisePlanModel.createBulkExercisePlans(validatedPlans);
+
+      // Fetch the newly created plans by matching userId and other fields
+      const userIds = [...new Set(validatedPlans.map(plan => plan.userId))]; // Unique userIds
+      const exercisePlansWithUsers = await ExercisePlanModel.findManyExercisePlansWithUsersByCriteria({
+        userId: { in: userIds },
+        day: { in: validatedPlans.map(plan => plan.day) },
+        name: { in: validatedPlans.map(plan => plan.name) },
+      }, createResult.count);
+
+      const formattedExercisePlans = exercisePlansWithUsers.map(plan => ({
+        id: plan.id,
+        day: plan.day,
+        name: plan.name,
+        sets: plan.sets,
+        reps: plan.reps,
+        duration: plan.duration,
+        userId: plan.userId,
+        createdAt: plan.createdAt.toISOString(),
+        updatedAt: plan.updatedAt.toISOString(),
+        user: plan.user || null
+      }));
+
+      res.status(201).json({
+        message: `${createResult.count} exercise plans created successfully`,
+        exercisePlans: formattedExercisePlans,
+        count: createResult.count,
+      });
+
+    } catch (error) {
+      console.error('Error creating bulk exercise plans:', error);
+      res.status(500).json({ message: 'Error creating bulk exercise plans', error: error.message });
     }
   }
 

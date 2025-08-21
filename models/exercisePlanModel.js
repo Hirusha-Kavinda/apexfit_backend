@@ -1,3 +1,4 @@
+// exercisePlanModel.js
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -13,6 +14,31 @@ class ExercisePlanModel {
         duration,
       },
     });
+  }
+
+  // NEW: Bulk create exercise plans
+  static async createBulkExercisePlans(exercisePlansData) {
+    return await prisma.exercisePlan.createMany({
+      data: exercisePlansData,
+      skipDuplicates: true, // Optional: skip duplicates if any
+    });
+  }
+
+  // Alternative method if you need to return the created records (createMany doesn't return the records)
+  static async createBulkExercisePlansWithReturn(exercisePlansData) {
+    const createdPlans = [];
+    
+    // Use a transaction to ensure all plans are created or none
+    await prisma.$transaction(async (tx) => {
+      for (const planData of exercisePlansData) {
+        const createdPlan = await tx.exercisePlan.create({
+          data: planData,
+        });
+        createdPlans.push(createdPlan);
+      }
+    });
+
+    return createdPlans;
   }
 
   static async findExercisePlansByUserId(userId) {
@@ -57,6 +83,19 @@ class ExercisePlanModel {
           },
         },
       },
+    });
+  }
+
+  static async findManyExercisePlansWithUsersByCriteria(criteria, limit) {
+    return await prisma.exercisePlan.findMany({
+      where: criteria,
+      include: {
+        user: {
+          select: { id: true, firstName: true, lastName: true, email: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit
     });
   }
 

@@ -4,8 +4,12 @@ const ExercisePlanController = require('../controllers/exercisePlanController');
 const authMiddleware = require('../middleware/authMiddleware');
 
 // ExercisePlan CRUD routes
-router.post('/',  (req, res) => ExercisePlanController.createExercisePlan(req, res));
-router.get('/',  (req, res) => ExercisePlanController.getUserExercisePlans(req, res));
+router.post('/', (req, res) => ExercisePlanController.createExercisePlan(req, res));
+
+// NEW: Bulk create route - should be before the /:id routes
+router.post('/bulk', (req, res) => ExercisePlanController.createBulkExercisePlans(req, res));
+
+router.get('/', (req, res) => ExercisePlanController.getUserExercisePlans(req, res));
 router.get('/all', (req, res) => ExercisePlanController.getAllExercisePlans(req, res));
 router.put('/:id', (req, res) => ExercisePlanController.updateExercisePlan(req, res));
 router.delete('/:id', (req, res) => ExercisePlanController.deleteExercisePlan(req, res));
