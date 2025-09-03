@@ -101,6 +101,15 @@ class AuthController {
       res.status(500).json({ message: 'Error logging in', error: error.message });
     }
   }
+
+  static async getAllUsers(req, res) {
+    try {
+      const users = await UserModel.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      res.status(500).json({ message: 'Error fetching users', error: error.message });
+    }
+  }
 }
 
 module.exports = AuthController;

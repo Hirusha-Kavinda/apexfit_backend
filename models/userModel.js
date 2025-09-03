@@ -29,6 +29,42 @@ class UserModel {
       },
     });
   }
+
+  static async getAllUsers() {
+    return await prisma.user.findMany({
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        birthday: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        userDetails: {
+          select: {
+            age: true,
+            height: true,
+            weight: true,
+            daysPerWeek: true,
+            gender: true,
+            fitnessLevel: true,
+            goal: true,
+            medicalCondition: true,
+          }
+        },
+        ExercisePlan: {
+          select: {
+            id: true,
+            name: true,
+            createdAt: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+  }
 }
 
 module.exports = UserModel;

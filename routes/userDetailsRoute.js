@@ -3,7 +3,7 @@ const UserDetailsController = require("../controllers/userDetailsController");
 
 const router = express.Router();
 
-// Routes
+// Routes - No authentication required
 router.post("/", UserDetailsController.createUserDetails);
 router.get("/", UserDetailsController.getAllUserDetails);
 router.get("/user/:userId", UserDetailsController.getUserDetailsByUser);

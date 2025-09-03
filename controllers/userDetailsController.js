@@ -6,6 +6,17 @@ class UserDetailsController {
     try {
       const { userId, age, height, weight, daysPerWeek, gender, fitnessLevel, medicalCondition, goal } = req.body;
 
+      // Validate required fields
+      if (!userId || !age || !height || !weight || !daysPerWeek || !gender || !fitnessLevel || !goal) {
+        return res.status(400).json({ 
+          error: "Missing required fields", 
+          required: ["userId", "age", "height", "weight", "daysPerWeek", "gender", "fitnessLevel", "goal"],
+          received: { userId, age, height, weight, daysPerWeek, gender, fitnessLevel, medicalCondition, goal }
+        });
+      }
+
+      console.log("Creating user details with data:", { userId, age, height, weight, daysPerWeek, gender, fitnessLevel, medicalCondition, goal });
+
       const userDetails = await UserDetailsModel.createUserDetails(
         userId,
         age,
@@ -21,7 +32,19 @@ class UserDetailsController {
       res.status(201).json(userDetails);
     } catch (error) {
       console.error("Error creating user details:", error);
-      res.status(500).json({ error: "Failed to create user details" });
+      
+      // Provide more specific error messages
+      if (error.code === 'P2002') {
+        res.status(400).json({ error: "User details already exist for this user" });
+      } else if (error.code === 'P2003') {
+        res.status(400).json({ error: "User not found. Please check if the user exists." });
+      } else {
+        res.status(500).json({ 
+          error: "Failed to create user details", 
+          details: error.message,
+          code: error.code 
+        });
+      }
     }
   }
 

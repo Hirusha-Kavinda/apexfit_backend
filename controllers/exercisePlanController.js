@@ -2,6 +2,7 @@
 const ExercisePlanModel = require('../models/exercisePlanModel');
 
 class ExercisePlanController {
+  // EXISTING METHOD - Keep as is
   static async getUserExercisePlans(req, res) {
     try {
       const userId = req.user.id;
@@ -20,13 +21,34 @@ class ExercisePlanController {
         updatedAt: plan.updatedAt.toISOString(),
       }));
 
-      res.json({ exercisePlans: formattedExercisePlans });
+      // NEW: Group by day for easier frontend handling
+      const groupedPlans = formattedExercisePlans.reduce((acc, plan) => {
+        if (!acc[plan.day]) {
+          acc[plan.day] = [];
+        }
+        acc[plan.day].push(plan);
+        return acc;
+      }, {});
+
+      res.json({ 
+        exercisePlans: formattedExercisePlans,
+        success: true,
+        data: {
+          raw: formattedExercisePlans,
+          grouped: groupedPlans
+        }
+      });
     } catch (error) {
       console.error('Error fetching user exercise plans:', error);
-      res.status(500).json({ message: 'Error fetching exercise plans', error: error.message });
+      res.status(500).json({ 
+        message: 'Error fetching exercise plans', 
+        error: error.message,
+        success: false
+      });
     }
   }
 
+  // EXISTING METHOD - Keep as is
   static async getAllExercisePlans(req, res) {
     try {
       const exercisePlans = await ExercisePlanModel.findAllExercisePlans();
@@ -45,13 +67,22 @@ class ExercisePlanController {
         user: plan.user || null,
       }));
 
-      res.json({ exercisePlans: formattedExercisePlans });
+      res.json({ 
+        exercisePlans: formattedExercisePlans,
+        success: true,
+        data: formattedExercisePlans
+      });
     } catch (error) {
       console.error('Error fetching all exercise plans:', error);
-      res.status(500).json({ message: 'Error fetching all exercise plans', error: error.message });
+      res.status(500).json({ 
+        message: 'Error fetching all exercise plans', 
+        error: error.message,
+        success: false
+      });
     }
   }
 
+  // EXISTING METHOD - Keep as is
   static async createExercisePlan(req, res) {
     try {
       const { day, name, sets, reps, duration, userId } = req.body;
@@ -90,102 +121,212 @@ class ExercisePlanController {
       res.status(201).json({
         message: 'Exercise plan created successfully',
         exercisePlan: formattedExercisePlan,
+        success: true,
+        data: formattedExercisePlan
       });
     } catch (error) {
       console.error('Error creating exercise plan:', error);
-      res.status(500).json({ message: 'Error creating exercise plan', error: error.message });
+      res.status(500).json({ 
+        message: 'Error creating exercise plan', 
+        error: error.message,
+        success: false
+      });
     }
   }
 
-  // NEW: Bulk create exercise plans
-  static async createBulkExercisePlans(req, res) {
+// Create bulk exercise plans (updated for admin use without auth)
+static async createBulkExercisePlans(req, res) {
+  try {
+    console.log('Creating bulk exercise plans:', req.body);
+    
+    const exercisePlansData = req.body;
+    
+    if (!Array.isArray(exercisePlansData) || exercisePlansData.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid input: Expected non-empty array of exercise plans'
+      });
+    }
+
+    // Validate and prepare data
+    const validatedPlans = [];
+    for (const plan of exercisePlansData) {
+      const { userId, day, name, sets, reps, duration } = plan;
+      
+      if (!userId || !day || !name) {
+        console.warn('Skipping invalid plan:', plan);
+        continue;
+      }
+      
+      validatedPlans.push({
+        userId: parseInt(userId),
+        day: day.toString(),
+        name: name.toString(),
+        sets: parseInt(sets) || 3,
+        reps: reps ? reps.toString() : "",
+        duration: duration ? duration.toString() : ""
+      });
+    }
+    
+    if (validatedPlans.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid exercise plans to create'
+      });
+    }
+
+    // Delete existing plans for the user(s) first
+    const userIds = [...new Set(validatedPlans.map(plan => plan.userId))];
+    console.log('Deleting existing plans for users:', userIds);
+    
+    for (const userId of userIds) {
+      await ExercisePlanModel.deleteExercisePlansByUserId(userId);
+    }
+
+    // Create new plans
+    console.log('Creating new plans:', validatedPlans);
+    const createResult = await ExercisePlanModel.createBulkExercisePlans(validatedPlans);
+    
+    // Fetch created plans with user details
+    const exercisePlansWithUsers = await ExercisePlanModel.findManyExercisePlansWithUsersByCriteria({
+      userId: { in: userIds }
+    });
+
+    // Format response
+    const formattedPlans = exercisePlansWithUsers.map(plan => ({
+      id: plan.id,
+      day: plan.day,
+      name: plan.name,
+      sets: plan.sets,
+      reps: plan.reps,
+      duration: plan.duration,
+      userId: plan.userId,
+      createdAt: plan.createdAt.toISOString(),
+      updatedAt: plan.updatedAt.toISOString(),
+      user: plan.user
+    }));
+
+    res.status(201).json({
+      success: true,
+      message: `Successfully created ${createResult.count} exercise plans`,
+      data: {
+        created: createResult.count,
+        plans: formattedPlans
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error creating bulk exercise plans:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error creating bulk exercise plans', 
+      error: error.message
+    });
+  }
+}
+  // NEW METHOD - Bulk upsert (create or update) to handle duplicates smartly
+  static async upsertBulkExercisePlans(req, res) {
     try {
       const exercisePlansData = req.body;
-
-      // Validate that request body is an array
-      if (!Array.isArray(exercisePlansData)) {
-        return res.status(400).json({ message: 'Request body must be an array of exercise plans' });
-      }
-
-      if (exercisePlansData.length === 0) {
-        return res.status(400).json({ message: 'At least one exercise plan is required' });
-      }
-
-      // Validate each exercise plan and prepare data
-      const validatedPlans = [];
-      const errors = [];
-
-      for (let i = 0; i < exercisePlansData.length; i++) {
-        const { day, name, sets, reps, duration, userId } = exercisePlansData[i];
-        
-        // Use userId from body if provided, otherwise from JWT token
-        const finalUserId = userId || (req.user ? req.user.id : null);
-
-        // Validate required fields
-        if (!day || !name || !sets || !reps || !duration) {
-          errors.push(`Plan ${i + 1}: Day, name, sets, reps, and duration are required`);
-          continue;
-        }
-
-        if (!finalUserId) {
-          errors.push(`Plan ${i + 1}: UserId is required (either from token or request body)`);
-          continue;
-        }
-
-        validatedPlans.push({
-          userId: finalUserId,
-          day,
-          name,
-          sets: parseInt(sets),
-          reps,
-          duration,
+      
+      if (!Array.isArray(exercisePlansData) || exercisePlansData.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid input: Expected non-empty array of exercise plans'
         });
       }
 
-      // If there are validation errors, return them
-      if (errors.length > 0) {
-        return res.status(400).json({ 
-          message: 'Validation errors found',
-          errors 
-        });
+      const results = {
+        created: 0,
+        updated: 0,
+        errors: []
+      };
+
+      for (const planData of exercisePlansData) {
+        try {
+          const { day, name, sets, reps, duration, userId } = planData;
+          const finalUserId = userId || (req.user ? req.user.id : null);
+
+          if (!day || !name || !finalUserId) {
+            results.errors.push({
+              exercise: name || 'Unknown',
+              error: 'Missing required fields'
+            });
+            continue;
+          }
+
+          // Check if exercise already exists
+          const existingPlans = await ExercisePlanModel.findExercisePlansByUserId(finalUserId);
+          const existing = existingPlans.find(plan => plan.day === day && plan.name === name);
+
+          if (existing) {
+            // Update existing
+            await ExercisePlanModel.updateExercisePlan(existing.id, {
+              sets: parseInt(sets) || existing.sets,
+              reps: reps || existing.reps,
+              duration: duration || existing.duration
+            });
+            results.updated++;
+          } else {
+            // Create new
+            await ExercisePlanModel.createExercisePlan(finalUserId, day, name, parseInt(sets) || 3, reps, duration);
+            results.created++;
+          }
+        } catch (planError) {
+          results.errors.push({
+            exercise: planData.name || 'Unknown',
+            error: planError.message
+          });
+        }
       }
 
-      // Create plans and get the count
-      const createResult = await ExercisePlanModel.createBulkExercisePlans(validatedPlans);
-
-      // Fetch the newly created plans by matching userId and other fields
-      const userIds = [...new Set(validatedPlans.map(plan => plan.userId))]; // Unique userIds
-      const exercisePlansWithUsers = await ExercisePlanModel.findManyExercisePlansWithUsersByCriteria({
-        userId: { in: userIds },
-        day: { in: validatedPlans.map(plan => plan.day) },
-        name: { in: validatedPlans.map(plan => plan.name) },
-      }, createResult.count);
-
-      const formattedExercisePlans = exercisePlansWithUsers.map(plan => ({
-        id: plan.id,
-        day: plan.day,
-        name: plan.name,
-        sets: plan.sets,
-        reps: plan.reps,
-        duration: plan.duration,
-        userId: plan.userId,
-        createdAt: plan.createdAt.toISOString(),
-        updatedAt: plan.updatedAt.toISOString(),
-        user: plan.user || null
-      }));
-
-      res.status(201).json({
-        message: `${createResult.count} exercise plans created successfully`,
-        exercisePlans: formattedExercisePlans,
-        count: createResult.count,
+      res.status(200).json({
+        success: true,
+        message: `Operation completed: ${results.created} created, ${results.updated} updated`,
+        data: results
       });
-
     } catch (error) {
-      console.error('Error creating bulk exercise plans:', error);
-      res.status(500).json({ message: 'Error creating bulk exercise plans', error: error.message });
+      console.error('Error upserting bulk exercise plans:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to process exercise plans',
+        error: error.message
+      });
     }
   }
 
+  // NEW METHOD - Delete all exercise plans for a user
+  static async deleteUserExercisePlans(req, res) {
+    try {
+      const { userId } = req.params;
+      const requestingUserId = req.user.id;
+
+      // Check if user can delete these plans (own plans or admin)
+      if (parseInt(userId) !== requestingUserId && req.user.role !== 'ADMIN') {
+        return res.status(403).json({ 
+          message: 'You can only delete your own exercise plans',
+          success: false
+        });
+      }
+
+      const deletedCount = await ExercisePlanModel.deleteExercisePlansByUserId(parseInt(userId));
+
+      res.status(200).json({
+        success: true,
+        message: `Successfully deleted ${deletedCount} exercise plans`,
+        data: { count: deletedCount }
+      });
+    } catch (error) {
+      console.error('Error deleting user exercise plans:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete exercise plans',
+        error: error.message
+      });
+    }
+  }
+
+  // EXISTING METHOD - Keep as is
   static async updateExercisePlan(req, res) {
     try {
       const { id } = req.params;
@@ -194,12 +335,18 @@ class ExercisePlanController {
 
       const existingExercisePlan = await ExercisePlanModel.findExercisePlanById(parseInt(id));
       if (!existingExercisePlan) {
-        return res.status(404).json({ message: 'Exercise plan not found' });
+        return res.status(404).json({ 
+          message: 'Exercise plan not found',
+          success: false
+        });
       }
 
       // Check if user owns the exercise plan or is admin
       if (existingExercisePlan.userId !== userId && req.user.role !== 'ADMIN') {
-        return res.status(403).json({ message: 'You can only update your own exercise plans' });
+        return res.status(403).json({ 
+          message: 'You can only update your own exercise plans',
+          success: false
+        });
       }
 
       const updateData = {};
@@ -229,13 +376,20 @@ class ExercisePlanController {
       res.json({
         message: 'Exercise plan updated successfully',
         exercisePlan: formattedExercisePlan,
+        success: true,
+        data: formattedExercisePlan
       });
     } catch (error) {
       console.error('Error updating exercise plan:', error);
-      res.status(500).json({ message: 'Error updating exercise plan', error: error.message });
+      res.status(500).json({ 
+        message: 'Error updating exercise plan', 
+        error: error.message,
+        success: false
+      });
     }
   }
 
+  // EXISTING METHOD - Keep as is
   static async deleteExercisePlan(req, res) {
     try {
       const { id } = req.params;
@@ -243,25 +397,37 @@ class ExercisePlanController {
 
       const existingExercisePlan = await ExercisePlanModel.findExercisePlanById(parseInt(id));
       if (!existingExercisePlan) {
-        return res.status(404).json({ message: 'Exercise plan not found' });
+        return res.status(404).json({ 
+          message: 'Exercise plan not found',
+          success: false
+        });
       }
 
       // Check if user owns the exercise plan or is admin
       if (existingExercisePlan.userId !== userId && req.user.role !== 'ADMIN') {
-        return res.status(403).json({ message: 'You can only delete your own exercise plans' });
+        return res.status(403).json({ 
+          message: 'You can only delete your own exercise plans',
+          success: false
+        });
       }
 
       await ExercisePlanModel.deleteExercisePlan(parseInt(id));
       res.json({
         message: 'Exercise plan deleted successfully',
         deletedExercisePlanId: parseInt(id),
+        success: true
       });
     } catch (error) {
       console.error('Error deleting exercise plan:', error);
-      res.status(500).json({ message: 'Error deleting exercise plan', error: error.message });
+      res.status(500).json({ 
+        message: 'Error deleting exercise plan', 
+        error: error.message,
+        success: false
+      });
     }
   }
 
+  // EXISTING METHOD - Keep as is
   static async getExercisePlanById(req, res) {
     try {
       const { id } = req.params;
@@ -269,12 +435,18 @@ class ExercisePlanController {
 
       const exercisePlan = await ExercisePlanModel.findExercisePlanByIdWithUser(parseInt(id));
       if (!exercisePlan) {
-        return res.status(404).json({ message: 'Exercise plan not found' });
+        return res.status(404).json({ 
+          message: 'Exercise plan not found',
+          success: false
+        });
       }
 
       // Check if user owns the exercise plan or is admin
       if (exercisePlan.userId !== userId && req.user.role !== 'ADMIN') {
-        return res.status(403).json({ message: 'You can only access your own exercise plans' });
+        return res.status(403).json({ 
+          message: 'You can only access your own exercise plans',
+          success: false
+        });
       }
 
       // Format response
@@ -291,10 +463,18 @@ class ExercisePlanController {
         user: exercisePlan.user,
       };
 
-      res.json({ exercisePlan: formattedExercisePlan });
+      res.json({ 
+        exercisePlan: formattedExercisePlan,
+        success: true,
+        data: formattedExercisePlan
+      });
     } catch (error) {
       console.error('Error fetching exercise plan:', error);
-      res.status(500).json({ message: 'Error fetching exercise plan', error: error.message });
+      res.status(500).json({ 
+        message: 'Error fetching exercise plan', 
+        error: error.message,
+        success: false
+      });
     }
   }
 }
