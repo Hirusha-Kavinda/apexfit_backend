@@ -48,6 +48,31 @@ class ExercisePlanModel {
     });
   }
 
+  // NEW: Find only active exercise plans for a user
+  static async findActiveExercisePlansByUserId(userId) {
+    return await prisma.exercisePlan.findMany({
+      where: { 
+        userId,
+        status: 'active'
+      },
+      orderBy: { day: 'asc' },
+    });
+  }
+
+  // NEW: Deactivate all active exercise plans for a user
+  static async deactivateExercisePlansByUserId(userId) {
+    const result = await prisma.exercisePlan.updateMany({
+      where: { 
+        userId,
+        status: 'active'
+      },
+      data: { 
+        status: 'inactive'
+      },
+    });
+    return result.count;
+  }
+
   static async findAllExercisePlans() {
     return await prisma.exercisePlan.findMany({
       orderBy: { day: 'asc' },
@@ -141,7 +166,8 @@ static async findManyExercisePlansWithUsersByCriteria(criteria, limit = null) {
         user: {
           select: {
             id: true,
-            fullName: true,
+            firstName: true,
+            lastName: true,
             email: true
           }
         }

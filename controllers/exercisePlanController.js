@@ -2,11 +2,24 @@
 const ExercisePlanModel = require('../models/exercisePlanModel');
 
 class ExercisePlanController {
-  // EXISTING METHOD - Keep as is
+  // UPDATED METHOD - Only show active exercise plans by default
   static async getUserExercisePlans(req, res) {
     try {
-      const userId = req.user.id;
-      const exercisePlans = await ExercisePlanModel.findExercisePlansByUserId(userId);
+      // Handle both authenticated users and admin access
+      const userId = req.user ? req.user.id : req.query.userId;
+      const { includeInactive } = req.query; // Optional query parameter to include inactive plans
+      
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required (either from authentication or query parameter)'
+        });
+      }
+      
+      // Get active plans by default, or all plans if includeInactive=true
+      const exercisePlans = includeInactive === 'true' 
+        ? await ExercisePlanModel.findExercisePlansByUserId(userId)
+        : await ExercisePlanModel.findActiveExercisePlansByUserId(userId);
 
       // Format exercise plans for frontend
       const formattedExercisePlans = exercisePlans.map(plan => ({
@@ -16,6 +29,8 @@ class ExercisePlanController {
         sets: plan.sets,
         reps: plan.reps,
         duration: plan.duration,
+        status: plan.status,
+        planVersion: plan.planVersion,
         userId: plan.userId,
         createdAt: plan.createdAt.toISOString(),
         updatedAt: plan.updatedAt.toISOString(),
@@ -82,7 +97,7 @@ class ExercisePlanController {
     }
   }
 
-  // EXISTING METHOD - Keep as is
+  // UPDATED METHOD - Handle both authenticated and admin access
   static async createExercisePlan(req, res) {
     try {
       const { day, name, sets, reps, duration, userId } = req.body;
@@ -91,12 +106,18 @@ class ExercisePlanController {
       const finalUserId = userId || (req.user ? req.user.id : null);
 
       if (!day || !name || !sets || !reps || !duration) {
-        return res.status(400).json({ message: 'Day, name, sets, reps, and duration are required' });
+        return res.status(400).json({ 
+          success: false,
+          message: 'Day, name, sets, reps, and duration are required' 
+        });
       }
 
       // Check if we have a valid userId
       if (!finalUserId) {
-        return res.status(400).json({ message: 'UserId is required (either from token or request body)' });
+        return res.status(400).json({ 
+          success: false,
+          message: 'UserId is required (either from token or request body)' 
+        });
       }
 
       const exercisePlan = await ExercisePlanModel.createExercisePlan(finalUserId, day, name, sets, reps, duration);
@@ -134,10 +155,10 @@ class ExercisePlanController {
     }
   }
 
-// Create bulk exercise plans (updated for admin use without auth)
+// Create bulk exercise plans with versioning system
 static async createBulkExercisePlans(req, res) {
   try {
-    console.log('Creating bulk exercise plans:', req.body);
+    console.log('Creating bulk exercise plans with versioning:', req.body);
     
     const exercisePlansData = req.body;
     
@@ -175,21 +196,48 @@ static async createBulkExercisePlans(req, res) {
       });
     }
 
-    // Delete existing plans for the user(s) first
+    // Get unique user IDs
     const userIds = [...new Set(validatedPlans.map(plan => plan.userId))];
-    console.log('Deleting existing plans for users:', userIds);
+    console.log('Processing exercise plans for users:', userIds);
     
+    let totalCreated = 0;
+    let totalDeactivated = 0;
+    
+    // Process each user separately for versioning
     for (const userId of userIds) {
-      await ExercisePlanModel.deleteExercisePlansByUserId(userId);
+      console.log(`Processing user ${userId}...`);
+      
+      // Get user's current active plans to determine next version
+      const existingActivePlans = await ExercisePlanModel.findActiveExercisePlansByUserId(userId);
+      const nextVersion = existingActivePlans.length > 0 ? 
+        Math.max(...existingActivePlans.map(plan => plan.planVersion || 1)) + 1 : 1;
+      
+      console.log(`User ${userId} - Current version: ${nextVersion - 1}, Next version: ${nextVersion}`);
+      
+      // Deactivate existing active plans (set status to 'inactive')
+      if (existingActivePlans.length > 0) {
+        const deactivatedCount = await ExercisePlanModel.deactivateExercisePlansByUserId(userId);
+        totalDeactivated += deactivatedCount;
+        console.log(`Deactivated ${deactivatedCount} existing plans for user ${userId}`);
+      }
+      
+      // Create new active plans with the new version
+      const userPlans = validatedPlans.filter(plan => plan.userId === userId);
+      const plansWithVersion = userPlans.map(plan => ({
+        ...plan,
+        status: 'active',
+        planVersion: nextVersion
+      }));
+      
+      console.log(`Creating ${plansWithVersion.length} new plans for user ${userId} with version ${nextVersion}`);
+      const createResult = await ExercisePlanModel.createBulkExercisePlans(plansWithVersion);
+      totalCreated += createResult.count;
     }
-
-    // Create new plans
-    console.log('Creating new plans:', validatedPlans);
-    const createResult = await ExercisePlanModel.createBulkExercisePlans(validatedPlans);
     
-    // Fetch created plans with user details
+    // Fetch all newly created plans with user details
     const exercisePlansWithUsers = await ExercisePlanModel.findManyExercisePlansWithUsersByCriteria({
-      userId: { in: userIds }
+      userId: { in: userIds },
+      status: 'active'
     });
 
     // Format response
@@ -200,6 +248,8 @@ static async createBulkExercisePlans(req, res) {
       sets: plan.sets,
       reps: plan.reps,
       duration: plan.duration,
+      status: plan.status,
+      planVersion: plan.planVersion,
       userId: plan.userId,
       createdAt: plan.createdAt.toISOString(),
       updatedAt: plan.updatedAt.toISOString(),
@@ -208,9 +258,10 @@ static async createBulkExercisePlans(req, res) {
 
     res.status(201).json({
       success: true,
-      message: `Successfully created ${createResult.count} exercise plans`,
+      message: `Successfully created ${totalCreated} new exercise plans and deactivated ${totalDeactivated} old plans`,
       data: {
-        created: createResult.count,
+        created: totalCreated,
+        deactivated: totalDeactivated,
         plans: formattedPlans
       }
     });
@@ -295,14 +346,14 @@ static async createBulkExercisePlans(req, res) {
     }
   }
 
-  // NEW METHOD - Delete all exercise plans for a user
+  // UPDATED METHOD - Delete all exercise plans for a user
   static async deleteUserExercisePlans(req, res) {
     try {
       const { userId } = req.params;
-      const requestingUserId = req.user.id;
+      const requestingUserId = req.user ? req.user.id : null;
 
-      // Check if user can delete these plans (own plans or admin)
-      if (parseInt(userId) !== requestingUserId && req.user.role !== 'ADMIN') {
+      // Check if user can delete these plans (own plans or admin) - skip if no auth
+      if (requestingUserId && parseInt(userId) !== requestingUserId && (!req.user || req.user.role !== 'ADMIN')) {
         return res.status(403).json({ 
           message: 'You can only delete your own exercise plans',
           success: false
@@ -326,12 +377,12 @@ static async createBulkExercisePlans(req, res) {
     }
   }
 
-  // EXISTING METHOD - Keep as is
+  // UPDATED METHOD - Handle both authenticated and admin access
   static async updateExercisePlan(req, res) {
     try {
       const { id } = req.params;
       const { day, name, sets, reps, duration } = req.body;
-      const userId = req.user.id;
+      const userId = req.user ? req.user.id : null;
 
       const existingExercisePlan = await ExercisePlanModel.findExercisePlanById(parseInt(id));
       if (!existingExercisePlan) {
@@ -341,8 +392,8 @@ static async createBulkExercisePlans(req, res) {
         });
       }
 
-      // Check if user owns the exercise plan or is admin
-      if (existingExercisePlan.userId !== userId && req.user.role !== 'ADMIN') {
+      // Check if user owns the exercise plan or is admin (skip check if no auth)
+      if (userId && existingExercisePlan.userId !== userId && (!req.user || req.user.role !== 'ADMIN')) {
         return res.status(403).json({ 
           message: 'You can only update your own exercise plans',
           success: false
@@ -389,11 +440,11 @@ static async createBulkExercisePlans(req, res) {
     }
   }
 
-  // EXISTING METHOD - Keep as is
+  // UPDATED METHOD - Handle both authenticated and admin access
   static async deleteExercisePlan(req, res) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = req.user ? req.user.id : null;
 
       const existingExercisePlan = await ExercisePlanModel.findExercisePlanById(parseInt(id));
       if (!existingExercisePlan) {
@@ -403,8 +454,8 @@ static async createBulkExercisePlans(req, res) {
         });
       }
 
-      // Check if user owns the exercise plan or is admin
-      if (existingExercisePlan.userId !== userId && req.user.role !== 'ADMIN') {
+      // Check if user owns the exercise plan or is admin (skip check if no auth)
+      if (userId && existingExercisePlan.userId !== userId && (!req.user || req.user.role !== 'ADMIN')) {
         return res.status(403).json({ 
           message: 'You can only delete your own exercise plans',
           success: false
@@ -427,11 +478,11 @@ static async createBulkExercisePlans(req, res) {
     }
   }
 
-  // EXISTING METHOD - Keep as is
+  // UPDATED METHOD - Handle both authenticated and admin access
   static async getExercisePlanById(req, res) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = req.user ? req.user.id : null;
 
       const exercisePlan = await ExercisePlanModel.findExercisePlanByIdWithUser(parseInt(id));
       if (!exercisePlan) {
@@ -441,8 +492,8 @@ static async createBulkExercisePlans(req, res) {
         });
       }
 
-      // Check if user owns the exercise plan or is admin
-      if (exercisePlan.userId !== userId && req.user.role !== 'ADMIN') {
+      // Check if user owns the exercise plan or is admin (skip check if no auth)
+      if (userId && exercisePlan.userId !== userId && (!req.user || req.user.role !== 'ADMIN')) {
         return res.status(403).json({ 
           message: 'You can only access your own exercise plans',
           success: false

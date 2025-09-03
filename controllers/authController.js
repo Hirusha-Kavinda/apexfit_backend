@@ -105,8 +105,19 @@ class AuthController {
   static async getAllUsers(req, res) {
     try {
       const users = await UserModel.getAllUsers();
+      console.log('getAllUsers - Total users fetched:', users.length);
+      console.log('getAllUsers - First user sample:', users[0] ? {
+        id: users[0].id,
+        firstName: users[0].firstName,
+        lastName: users[0].lastName,
+        hasUserDetails: !!users[0].userDetails,
+        userDetailsLength: users[0].userDetails ? users[0].userDetails.length : 0,
+        hasExercisePlan: !!users[0].ExercisePlan,
+        exercisePlanLength: users[0].ExercisePlan ? users[0].ExercisePlan.length : 0
+      } : 'No users found');
       res.json(users);
     } catch (error) {
+      console.error('Error in getAllUsers:', error);
       res.status(500).json({ message: 'Error fetching users', error: error.message });
     }
   }

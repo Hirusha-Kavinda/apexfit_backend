@@ -55,8 +55,15 @@ class UserModel {
         ExercisePlan: {
           select: {
             id: true,
+            day: true,
             name: true,
+            sets: true,
+            reps: true,
+            duration: true,
+            status: true,
+            planVersion: true,
             createdAt: true,
+            updatedAt: true,
           }
         }
       },
