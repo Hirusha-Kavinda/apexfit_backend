@@ -20,5 +20,6 @@ router.post('/bulk/upsert', (req, res) => ExercisePlanController.upsertBulkExerc
 
 // User-specific bulk operations
 router.delete('/user/:userId', (req, res) => ExercisePlanController.deleteUserExercisePlans(req, res));
+router.get('/user/:userId', (req, res) => ExercisePlanController.getUserExercisePlans(req, res));
 
 module.exports = router;

@@ -6,20 +6,29 @@ class ExercisePlanController {
   static async getUserExercisePlans(req, res) {
     try {
       // Handle both authenticated users and admin access
-      const userId = req.user ? req.user.id : req.query.userId;
+      const userId = req.user ? req.user.id : req.params.userId || req.query.userId;
       const { includeInactive } = req.query; // Optional query parameter to include inactive plans
       
       if (!userId) {
         return res.status(400).json({
           success: false,
-          message: 'User ID is required (either from authentication or query parameter)'
+          message: 'User ID is required (either from authentication, path parameter, or query parameter)'
+        });
+      }
+
+      // Convert userId to integer
+      const userIdInt = parseInt(userId);
+      if (isNaN(userIdInt)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid user ID format'
         });
       }
       
       // Get active plans by default, or all plans if includeInactive=true
       const exercisePlans = includeInactive === 'true' 
-        ? await ExercisePlanModel.findExercisePlansByUserId(userId)
-        : await ExercisePlanModel.findActiveExercisePlansByUserId(userId);
+        ? await ExercisePlanModel.findExercisePlansByUserId(userIdInt)
+        : await ExercisePlanModel.findActiveExercisePlansByUserId(userIdInt);
 
       // Format exercise plans for frontend
       const formattedExercisePlans = exercisePlans.map(plan => ({

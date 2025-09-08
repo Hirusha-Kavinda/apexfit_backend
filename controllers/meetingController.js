@@ -194,10 +194,10 @@ static async getAllMeetings(req, res) {
       const { status } = req.body;
       const userId = req.user.id;
       
-      const validStatuses = ['pending', 'complete', 'cancel'];
+      const validStatuses = ['pending', 'cancel', 'complete'];
       if (!status || !validStatuses.includes(status.toLowerCase())) {
         return res.status(400).json({ 
-          message: 'Invalid status. Must be one of: pending, complete, cancel' 
+          message: 'Invalid status. Must be one of: pending, cancel, complete' 
         });
       }
 

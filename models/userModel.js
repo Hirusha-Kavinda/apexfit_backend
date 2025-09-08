@@ -65,6 +65,19 @@ class UserModel {
             createdAt: true,
             updatedAt: true,
           }
+        },
+        meetings: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            date: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+          }
         }
       },
       orderBy: {
