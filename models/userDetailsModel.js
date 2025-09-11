@@ -2,8 +2,18 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 class UserDetailsModel {
-  // Create new user details record
+  // Create new user details record with versioning
   static async createUserDetails(userId, age, height, weight, daysPerWeek, gender, fitnessLevel, medicalCondition, goal) {
+    // First, mark any existing current records as past
+    await prisma.userDetails.updateMany({
+      where: { 
+        userId: Number(userId),
+        status: 'current'
+      },
+      data: { status: 'past' }
+    });
+
+    // Then create the new current record
     return await prisma.userDetails.create({
       data: {
         userId,
@@ -15,6 +25,7 @@ class UserDetailsModel {
         fitnessLevel,
         medicalCondition,
         goal,
+        status: 'current',
       },
     });
   }
@@ -29,6 +40,25 @@ class UserDetailsModel {
 
   // Get user details by userId
   static async getUserDetailsByUser(userId) {
+    return await prisma.userDetails.findMany({
+      where: { userId: Number(userId) },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // Get current user details by userId
+  static async getCurrentUserDetailsByUser(userId) {
+    return await prisma.userDetails.findFirst({
+      where: { 
+        userId: Number(userId),
+        status: 'current'
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // Get all user details by userId (including past versions)
+  static async getAllUserDetailsByUser(userId) {
     return await prisma.userDetails.findMany({
       where: { userId: Number(userId) },
       orderBy: { createdAt: 'desc' },

@@ -18,6 +18,11 @@ enum ExercisePlanStatus {
   inactive
 }
 
+enum UserDetailsStatus {
+  current
+  past
+}
+
 
 model User {
   id        Int      @id @default(autoincrement())
@@ -60,6 +65,7 @@ model userDetails {
   fitnessLevel     String
   medicalCondition String
   goal             String
+  status           UserDetailsStatus @default(current)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

@@ -58,14 +58,25 @@ class UserDetailsController {
     }
   }
 
-  // Get by userId
+  // Get by userId (all versions)
   static async getUserDetailsByUser(req, res) {
     try {
       const { userId } = req.params;
-      const details = await UserDetailsModel.getUserDetailsByUser(userId);
+      const details = await UserDetailsModel.getAllUserDetailsByUser(userId);
       res.json(details);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch user details" });
+    }
+  }
+
+  // Get current user details by userId
+  static async getCurrentUserDetailsByUser(req, res) {
+    try {
+      const { userId } = req.params;
+      const details = await UserDetailsModel.getCurrentUserDetailsByUser(userId);
+      res.json(details);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch current user details" });
     }
   }
 
