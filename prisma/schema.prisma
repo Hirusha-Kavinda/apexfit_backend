@@ -23,6 +23,11 @@ enum UserDetailsStatus {
   past
 }
 
+enum ExerciseTrackingStatus {
+  complete
+  lost
+}
+
 
 model User {
   id        Int      @id @default(autoincrement())
@@ -39,6 +44,7 @@ model User {
 
   userDetails userDetails[]
   ExercisePlan ExercisePlan[]
+  ExerciseTracking ExerciseTracking[]
 }
 
 model Meeting {
@@ -88,5 +94,22 @@ model ExercisePlan {
   
   userId   Int
   user    User @relation(fields: [userId], references: [id])
+  ExerciseTracking ExerciseTracking[]
+}
 
+model ExerciseTracking {
+  id             Int                    @id @default(autoincrement())
+  userId         Int
+  exercisePlanId Int
+  day            String
+  weekStartDate  DateTime
+  status         ExerciseTrackingStatus @default(lost)
+  completedAt    DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id])
+  exercisePlan ExercisePlan @relation(fields: [exercisePlanId], references: [id])
+
+  @@unique([userId, exercisePlanId, day, weekStartDate])
 }
