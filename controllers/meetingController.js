@@ -328,6 +328,50 @@ static async notifyMeetingStart(req, res) {
 
 
 
+  static async sendMeetingEmail(req, res) {
+    try {
+      const { to, subject, html } = req.body;
+      
+      if (!to || !subject || !html) {
+        return res.status(400).json({ 
+          message: 'to, subject, and html are required' 
+        });
+      }
+
+      // Configure nodemailer transporter
+      const transporter = nodemailer.createTransporter({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT) || 465,
+        secure: true,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.SMTP_FROM || '"ApexFit" <noreply@apexfit.com>',
+        to: to,
+        subject: subject,
+        html: html
+      };
+
+      await transporter.sendMail(mailOptions);
+
+      res.json({
+        message: 'Email sent successfully',
+        sentTo: to
+      });
+
+    } catch (error) {
+      console.error('Error sending email:', error);
+      res.status(500).json({ 
+        message: 'Error sending email', 
+        error: error.message 
+      });
+    }
+  }
+
   static async sendMeetingStartEmail(meeting, meetingLink) {
     try {
       // Configure nodemailer transporter

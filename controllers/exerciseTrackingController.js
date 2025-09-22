@@ -1,34 +1,36 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// Get user's exercise plan with tracking data
+// Get user's exercise plan with tracking data (using DayTracker system)
 const getUserExercisePlan = async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Get user's current exercise plan
-    const exercisePlan = await prisma.exercisePlan.findMany({
-      where: {
-        userId: parseInt(userId),
-        status: 'active'
-      },
-      orderBy: {
-        day: 'asc'
-      }
-    });
-
-    if (!exercisePlan || exercisePlan.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'No active exercise plan found for this user'
-      });
-    }
-
     // Get current week start date (Monday)
     const now = new Date();
     const currentWeekStart = new Date(now);
     currentWeekStart.setDate(now.getDate() - now.getDay() + 1); // Monday
     currentWeekStart.setHours(0, 0, 0, 0);
+
+    // Get day trackers with exercise plans
+    const dayTrackers = await prisma.dayTracker.findMany({
+      where: {
+        userId: parseInt(userId)
+      },
+      include: {
+        exercisePlan: true
+      },
+      orderBy: {
+        dayInWeek: 'asc'
+      }
+    });
+
+    if (!dayTrackers || dayTrackers.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No day trackers found for this user'
+      });
+    }
 
     // Get tracking data for current week
     const trackingData = await prisma.exerciseTracking.findMany({
@@ -38,18 +40,20 @@ const getUserExercisePlan = async (req, res) => {
       }
     });
 
-    // Group exercises by day
+    // Group exercises by day using day trackers
     const exercisesByDay = {};
-    exercisePlan.forEach(exercise => {
-      if (!exercisesByDay[exercise.day]) {
-        exercisesByDay[exercise.day] = [];
+    dayTrackers.forEach(tracker => {
+      if (!exercisesByDay[tracker.dayInWeek]) {
+        exercisesByDay[tracker.dayInWeek] = [];
       }
       
       // Find tracking data for this exercise
-      const tracking = trackingData.find(t => t.exercisePlanId === exercise.id);
+      const tracking = trackingData.find(t => t.exercisePlanId === tracker.exercisePlanId);
       
-      exercisesByDay[exercise.day].push({
-        ...exercise,
+      exercisesByDay[tracker.dayInWeek].push({
+        ...tracker.exercisePlan,
+        dayTrackerId: tracker.id,
+        day: tracker.dayInWeek, // Use dayInWeek from tracker
         tracking: tracking || {
           status: 'lost',
           completedAt: null
@@ -62,7 +66,7 @@ const getUserExercisePlan = async (req, res) => {
       data: {
         exercisesByDay,
         currentWeekStart: currentWeekStart.toISOString(),
-        totalExercises: exercisePlan.length,
+        totalExercises: dayTrackers.length,
         completedExercises: trackingData.filter(t => t.status === 'complete').length
       }
     });
@@ -211,3 +215,6 @@ module.exports = {
   markExerciseComplete,
   getWeeklyProgress
 };
+
+
+

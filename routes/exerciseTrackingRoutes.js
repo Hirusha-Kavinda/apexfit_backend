@@ -16,3 +16,12 @@ router.post('/complete', markExerciseComplete);
 router.get('/user/:userId/progress', getWeeklyProgress);
 
 module.exports = router;
+
+
+
+
+
+
+
+
+

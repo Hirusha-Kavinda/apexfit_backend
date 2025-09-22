@@ -18,3 +18,12 @@ ALTER TABLE `ExerciseTracking` ADD CONSTRAINT `ExerciseTracking_userId_fkey` FOR
 
 -- AddForeignKey
 ALTER TABLE `ExerciseTracking` ADD CONSTRAINT `ExerciseTracking_exercisePlanId_fkey` FOREIGN KEY (`exercisePlanId`) REFERENCES `ExercisePlan`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+
+
+
+
+
+
+
+
