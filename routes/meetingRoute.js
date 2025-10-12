@@ -25,7 +25,23 @@ router.post('/:id/join', authMiddleware(), (req, res) => MeetingController.joinM
 router.post('/:id/leave', authMiddleware(), (req, res) => MeetingController.leaveMeeting(req, res));
 router.get('/:id/participants', authMiddleware(), (req, res) => MeetingController.getMeetingParticipants(req, res));
 
+// Cross-browser connection status management
+router.post('/:id/connection', authMiddleware(), (req, res) => MeetingController.setConnectionStatus(req, res));
+router.get('/:id/connection', authMiddleware(), (req, res) => MeetingController.getConnectionStatus(req, res));
+router.delete('/:id/connection', authMiddleware(), (req, res) => MeetingController.clearConnectionStatus(req, res));
+
+// WebRTC signaling endpoints
+router.post('/:id/webrtc/offer', authMiddleware(), (req, res) => MeetingController.createWebRTCOffer(req, res));
+router.post('/:id/webrtc/answer', authMiddleware(), (req, res) => MeetingController.createWebRTCAnswer(req, res));
+router.get('/:id/webrtc/offer', authMiddleware(), (req, res) => MeetingController.getWebRTCOffer(req, res));
+router.get('/:id/webrtc/answer', authMiddleware(), (req, res) => MeetingController.getWebRTCAnswer(req, res));
+router.post('/:id/webrtc/ice', authMiddleware(), (req, res) => MeetingController.addIceCandidate(req, res));
+router.get('/:id/webrtc/ice', authMiddleware(), (req, res) => MeetingController.getIceCandidates(req, res));
+
 // Email sending endpoint
 router.post('/send-email', authMiddleware(), (req, res) => MeetingController.sendMeetingEmail(req, res));
+
+// ML API proxy endpoint (to handle CORS issues)
+router.post('/ml-proxy/recommend', authMiddleware(), (req, res) => MeetingController.mlProxyRecommend(req, res));
 
 module.exports = router;

@@ -1,5 +1,6 @@
 const MeetingModel = require('../models/meetingModel');
 const nodemailer = require('nodemailer');
+const axios = require('axios');
 
 class MeetingController {
   
@@ -607,6 +608,349 @@ static async getMeetingParticipants(req, res) {
   } catch (error) {
     console.error('Error getting participants:', error);
     res.status(500).json({ message: 'Error getting participants', error: error.message });
+  }
+}
+
+// Cross-browser connection status management
+static connectionStatus = new Map();
+
+static async setConnectionStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const { userRole, isConnected, userName, timestamp } = req.body;
+    const meetingId = parseInt(id);
+    
+    // Get or create connection status for this meeting
+    if (!MeetingController.connectionStatus.has(meetingId)) {
+      MeetingController.connectionStatus.set(meetingId, {
+        admin: { connected: false, name: 'Admin', lastSeen: 0 },
+        user: { connected: false, name: 'User', lastSeen: 0 }
+      });
+    }
+    
+    const status = MeetingController.connectionStatus.get(meetingId);
+    
+    // Update the specific user's connection status
+    if (userRole === 'ADMIN') {
+      status.admin = {
+        connected: isConnected,
+        name: userName || 'Admin',
+        lastSeen: timestamp || Date.now()
+      };
+    } else if (userRole === 'USER') {
+      status.user = {
+        connected: isConnected,
+        name: userName || 'User',
+        lastSeen: timestamp || Date.now()
+      };
+    }
+    
+    // Clean up stale connections (older than 15 seconds)
+    const now = Date.now();
+    const staleThreshold = 15000; // 15 seconds
+    
+    if (now - status.admin.lastSeen > staleThreshold) {
+      status.admin.connected = false;
+    }
+    if (now - status.user.lastSeen > staleThreshold) {
+      status.user.connected = false;
+    }
+    
+    console.log(`Connection status updated for ${userRole} in meeting ${meetingId}:`, status);
+    
+    res.json({
+      message: 'Connection status updated successfully',
+      status: status
+    });
+
+  } catch (error) {
+    console.error('Error setting connection status:', error);
+    res.status(500).json({ message: 'Error setting connection status', error: error.message });
+  }
+}
+
+static async getConnectionStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const meetingId = parseInt(id);
+    
+    const status = MeetingController.connectionStatus.get(meetingId);
+    
+    if (!status) {
+      return res.json({
+        admin: { connected: false, name: 'Admin', lastSeen: 0 },
+        user: { connected: false, name: 'User', lastSeen: 0 }
+      });
+    }
+    
+    // Clean up stale connections
+    const now = Date.now();
+    const staleThreshold = 15000; // 15 seconds
+    
+    if (now - status.admin.lastSeen > staleThreshold) {
+      status.admin.connected = false;
+    }
+    if (now - status.user.lastSeen > staleThreshold) {
+      status.user.connected = false;
+    }
+    
+    res.json(status);
+
+  } catch (error) {
+    console.error('Error getting connection status:', error);
+    res.status(500).json({ message: 'Error getting connection status', error: error.message });
+  }
+}
+
+static async clearConnectionStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const { userRole } = req.body;
+    const meetingId = parseInt(id);
+    
+    const status = MeetingController.connectionStatus.get(meetingId);
+    
+    if (status) {
+      if (userRole === 'ADMIN') {
+        status.admin.connected = false;
+        status.admin.lastSeen = Date.now();
+      } else if (userRole === 'USER') {
+        status.user.connected = false;
+        status.user.lastSeen = Date.now();
+      }
+      
+      console.log(`Connection cleared for ${userRole} in meeting ${meetingId}`);
+    }
+    
+    res.json({ message: 'Connection status cleared successfully' });
+
+  } catch (error) {
+    console.error('Error clearing connection status:', error);
+    res.status(500).json({ message: 'Error clearing connection status', error: error.message });
+  }
+}
+
+// WebRTC signaling for video calls
+static webrtcSignaling = new Map();
+
+static async createWebRTCOffer(req, res) {
+  try {
+    const { id } = req.params;
+    const { offer, userRole } = req.body;
+    const meetingId = parseInt(id);
+    
+    // Store the offer for the meeting
+    if (!MeetingController.webrtcSignaling.has(meetingId)) {
+      MeetingController.webrtcSignaling.set(meetingId, {
+        offer: null,
+        answer: null,
+        adminConnected: false,
+        userConnected: false
+      });
+    }
+    
+    const signaling = MeetingController.webrtcSignaling.get(meetingId);
+    signaling.offer = offer;
+    
+    if (userRole === 'ADMIN') {
+      signaling.adminConnected = true;
+    } else if (userRole === 'USER') {
+      signaling.userConnected = true;
+    }
+    
+    console.log(`WebRTC offer created for meeting ${meetingId} by ${userRole}`);
+    
+    res.json({
+      message: 'WebRTC offer created successfully',
+      meetingId: meetingId
+    });
+
+  } catch (error) {
+    console.error('Error creating WebRTC offer:', error);
+    res.status(500).json({ message: 'Error creating WebRTC offer', error: error.message });
+  }
+}
+
+static async createWebRTCAnswer(req, res) {
+  try {
+    const { id } = req.params;
+    const { answer, userRole } = req.body;
+    const meetingId = parseInt(id);
+    
+    const signaling = MeetingController.webrtcSignaling.get(meetingId);
+    
+    if (!signaling) {
+      return res.status(404).json({ message: 'No WebRTC offer found for this meeting' });
+    }
+    
+    signaling.answer = answer;
+    
+    if (userRole === 'ADMIN') {
+      signaling.adminConnected = true;
+    } else if (userRole === 'USER') {
+      signaling.userConnected = true;
+    }
+    
+    console.log(`WebRTC answer created for meeting ${meetingId} by ${userRole}`);
+    
+    res.json({
+      message: 'WebRTC answer created successfully',
+      meetingId: meetingId
+    });
+
+  } catch (error) {
+    console.error('Error creating WebRTC answer:', error);
+    res.status(500).json({ message: 'Error creating WebRTC answer', error: error.message });
+  }
+}
+
+static async getWebRTCOffer(req, res) {
+  try {
+    const { id } = req.params;
+    const meetingId = parseInt(id);
+    
+    const signaling = MeetingController.webrtcSignaling.get(meetingId);
+    
+    if (!signaling || !signaling.offer) {
+      return res.json({ offer: null, message: 'No offer available' });
+    }
+    
+    res.json({
+      offer: signaling.offer,
+      adminConnected: signaling.adminConnected,
+      userConnected: signaling.userConnected
+    });
+
+  } catch (error) {
+    console.error('Error getting WebRTC offer:', error);
+    res.status(500).json({ message: 'Error getting WebRTC offer', error: error.message });
+  }
+}
+
+static async getWebRTCAnswer(req, res) {
+  try {
+    const { id } = req.params;
+    const meetingId = parseInt(id);
+    
+    const signaling = MeetingController.webrtcSignaling.get(meetingId);
+    
+    if (!signaling || !signaling.answer) {
+      return res.json({ answer: null, message: 'No answer available' });
+    }
+    
+    res.json({
+      answer: signaling.answer,
+      adminConnected: signaling.adminConnected,
+      userConnected: signaling.userConnected
+    });
+
+  } catch (error) {
+    console.error('Error getting WebRTC answer:', error);
+    res.status(500).json({ message: 'Error getting WebRTC answer', error: error.message });
+  }
+}
+
+static async addIceCandidate(req, res) {
+  try {
+    const { id } = req.params;
+    const { candidate, userRole } = req.body;
+    const meetingId = parseInt(id);
+    
+    // Store ICE candidate for the meeting
+    if (!MeetingController.webrtcSignaling.has(meetingId)) {
+      MeetingController.webrtcSignaling.set(meetingId, {
+        offer: null,
+        answer: null,
+        iceCandidates: [],
+        adminConnected: false,
+        userConnected: false
+      });
+    }
+    
+    const signaling = MeetingController.webrtcSignaling.get(meetingId);
+    
+    if (!signaling.iceCandidates) {
+      signaling.iceCandidates = [];
+    }
+    
+    signaling.iceCandidates.push({
+      candidate: candidate,
+      userRole: userRole,
+      timestamp: Date.now()
+    });
+    
+    console.log(`ICE candidate added for meeting ${meetingId} by ${userRole}`);
+    
+    res.json({ message: 'ICE candidate added successfully' });
+
+  } catch (error) {
+    console.error('Error adding ICE candidate:', error);
+    res.status(500).json({ message: 'Error adding ICE candidate', error: error.message });
+  }
+}
+
+static async getIceCandidates(req, res) {
+  try {
+    const { id } = req.params;
+    const meetingId = parseInt(id);
+    
+    const signaling = MeetingController.webrtcSignaling.get(meetingId);
+    
+    if (!signaling || !signaling.iceCandidates) {
+      return res.json({ candidates: [] });
+    }
+    
+    res.json({ candidates: signaling.iceCandidates });
+
+  } catch (error) {
+    console.error('Error getting ICE candidates:', error);
+    res.status(500).json({ message: 'Error getting ICE candidates', error: error.message });
+  }
+}
+
+// ML API Proxy endpoint to handle CORS issues
+static async mlProxyRecommend(req, res) {
+  try {
+    console.log('ML Proxy: Received request:', req.body);
+    
+    // Forward the request to the ML server
+    const mlResponse = await axios.post('http://127.0.0.1:8000/recommend', req.body, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      timeout: 30000,
+    });
+    
+    console.log('ML Proxy: ML server response status:', mlResponse.status);
+    console.log('ML Proxy: ML server response data:', mlResponse.data);
+    
+    // Forward the response back to the frontend
+    res.status(mlResponse.status).json(mlResponse.data);
+    
+  } catch (error) {
+    console.error('ML Proxy Error:', error);
+    
+    if (error.response) {
+      // ML server responded with error
+      console.error('ML server error:', error.response.status, error.response.data);
+      res.status(error.response.status).json({
+        message: 'ML server error',
+        error: error.response.data
+      });
+    } else if (error.code === 'ECONNREFUSED') {
+      // ML server not running
+      res.status(503).json({
+        message: 'ML server not available',
+        error: 'Connection refused to http://127.0.0.1:8000'
+      });
+    } else {
+      // Other errors
+      res.status(500).json({
+        message: 'ML proxy error',
+        error: error.message
+      });
+    }
   }
 }
 

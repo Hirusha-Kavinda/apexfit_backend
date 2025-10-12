@@ -28,24 +28,22 @@ enum ExerciseTrackingStatus {
   lost
 }
 
-
 model User {
-  id        Int      @id @default(autoincrement())
-  firstName String   @default("")
-  lastName  String   @default("")
+  id        Int       @id @default(autoincrement())
+  firstName String    @default("")
+  lastName  String    @default("")
   birthday  String
-  email     String   @unique(map: "User_email_key")
+  email     String    @unique(map: "User_email_key")
   password  String
-  role      String   @default("USER")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role      String    @default("USER")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   meetings  Meeting[] @relation("UserMeetings")
 
-
-  userDetails userDetails[]
-  ExercisePlan ExercisePlan[]
+  userDetails      userDetails[]
+  ExercisePlan     ExercisePlan[]
   ExerciseTracking ExerciseTracking[]
-  DayTracker DayTracker[]
+  DayTracker       DayTracker[]
 }
 
 model Meeting {
@@ -63,7 +61,7 @@ model Meeting {
 }
 
 model userDetails {
-  id               Int      @id @default(autoincrement())
+  id               Int               @id @default(autoincrement())
   age              Int
   height           Int
   weight           Int
@@ -73,30 +71,30 @@ model userDetails {
   medicalCondition String
   goal             String
   status           UserDetailsStatus @default(current)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   // Foreign Key
-  userId  Int
-  user    User @relation(fields: [userId], references: [id])
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
 }
 
 model ExercisePlan {
-  id       Int    @id @default(autoincrement())
-  day      String
-  name     String
-  sets     Int
-  reps     String
-  duration String
-  status   ExercisePlanStatus @default(active)
-  planVersion Int @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  userId   Int
-  user    User @relation(fields: [userId], references: [id])
+  id          Int                @id @default(autoincrement())
+  day         String
+  name        String
+  sets        Int
+  reps        String
+  duration    String
+  status      ExercisePlanStatus @default(active)
+  planVersion Int                @default(1)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  userId           Int
+  user             User               @relation(fields: [userId], references: [id])
   ExerciseTracking ExerciseTracking[]
-  DayTracker DayTracker[]
+  DayTracker       DayTracker[]
 }
 
 model ExerciseTracking {
@@ -118,7 +116,7 @@ model ExerciseTracking {
 
 model DayTracker {
   id             Int      @id @default(autoincrement())
-  dayInWeek      String   // monday, tuesday, wednesday, etc.
+  dayInWeek      String // monday, tuesday, wednesday, etc.
   exercisePlanId Int
   userId         Int
   createdAt      DateTime @default(now())
